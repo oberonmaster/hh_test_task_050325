@@ -6,7 +6,6 @@ BASE_URL = "https://zakupki.gov.ru/epz/order/extendedsearch/results.html"
 XML_URL = "https://zakupki.gov.ru/epz/order/notice/printForm/viewXml.html?regNumber={}"
 
 def fetch_tenders_sync(page):
-    """Синхронно получает список тендеров"""
     url = f"{BASE_URL}?fz44=on&pageNumber={page}"
     response = requests.get(url)
     soup = BeautifulSoup(response.text, "html.parser")

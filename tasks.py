@@ -1,4 +1,4 @@
-from celery import shared_task
+from celery_config import app
 import requests
 from bs4 import BeautifulSoup
 import xmltodict
@@ -8,7 +8,7 @@ PRINT_URL = "https://zakupki.gov.ru/epz/order/notice/printForm/view.html?regNumb
 XML_URL = "https://zakupki.gov.ru/epz/order/notice/printForm/viewXml.html?regNumber={}"
 
 
-@shared_task
+@app.task
 def fetch_tenders(page):
     """Получает список ID тендеров с указанной страницы"""
     url = f"{BASE_URL}?fz44=on&pageNumber={page}"
@@ -27,16 +27,33 @@ def fetch_tenders(page):
     return tenders
 
 
-@shared_task
+@app.task
 def fetch_publish_date(tender_id):
     """Получает дату публикации тендера из XML"""
     xml_url = XML_URL.format(tender_id)
-    response = requests.get(xml_url)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    response = requests.get(xml_url, headers=headers)
 
     if response.status_code != 200:
-        return f"{xml_url} - None"
+        print(f"Ошибка запроса: {xml_url} - Код {response.status_code}")
+        return f"{xml_url} - ERROR {response.status_code}"
 
-    xml_data = xmltodict.parse(response.text)
-    publish_date = xml_data.get('export', {}).get('contract', {}).get('publishDTInEIS', None)
+    print(f"Raw XML for {tender_id}:\n", response.text[:500])  # Выведет первые 500 символов XML
 
-    return f"{xml_url} - {publish_date}"
+    try:
+        xml_data = xmltodict.parse(response.text)
+        print(f"Parsed XML Data for {tender_id}:\n", xml_data)  # Проверяем структуру
+
+        # Поиск даты
+        publish_date = (
+            xml_data.get('export', {})
+                    .get('fcsNotification', {})
+                    .get('publishDTInEIS', None)
+        )
+
+        return f"{xml_url} - {publish_date}"
+    except Exception as e:
+        print(f"Ошибка парсинга XML для {tender_id}: {e}")
+        return f"{xml_url} - XML Parsing Error: {str(e)}"
